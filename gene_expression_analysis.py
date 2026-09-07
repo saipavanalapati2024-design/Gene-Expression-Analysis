@@ -11,58 +11,46 @@ DATA_FILE = PROJECT_ROOT / "data" / "gene_expression.csv"
 RESULTS_DIR = PROJECT_ROOT / "results"
 
 
-def main():
+def main() -> None:
     RESULTS_DIR.mkdir(exist_ok=True)
 
-    df = pd.read_csv(DATA_FILE)
+    data = pd.read_csv(DATA_FILE)
+    if "Gene" not in data.columns:
+        raise ValueError("The input CSV must contain a 'Gene' column.")
 
-    print("\n========== DATASET INFORMATION ==========\n")
-    print("Dataset shape:", df.shape)
-    print("\nFirst 5 rows:")
-    print(df.head())
-    print("\nColumn names:")
-    print(df.columns.tolist())
+    expression_columns = [column for column in data.columns if column != "Gene"]
+    if not expression_columns:
+        raise ValueError("The input CSV must contain at least one sample column.")
 
-    print("\n========== MISSING VALUES ==========\n")
-    print(df.isnull().sum())
-
-    df = df.drop_duplicates(subset="Gene")
-    expression_columns = df.columns[1:]
-    df[expression_columns] = df[expression_columns].apply(
+    data[expression_columns] = data[expression_columns].apply(
         pd.to_numeric, errors="coerce"
     )
-    df["Mean_Expression"] = df[expression_columns].mean(axis=1)
-
-    ranked_genes = df.sort_values(
+    data = data.drop_duplicates(subset="Gene")
+    data["Mean_Expression"] = data[expression_columns].mean(axis=1)
+    ranked_genes = data.dropna(subset=["Mean_Expression"]).sort_values(
         by="Mean_Expression", ascending=False
     )
-    top_10_genes = ranked_genes.head(10)
-    selected_columns = ["Gene", "Mean_Expression"]
-
-    print("\n========== TOP 10 EXPRESSED GENES ==========\n")
-    print(top_10_genes[selected_columns].to_string(index=False))
+    top_10_genes = ranked_genes.head(10)[["Gene", "Mean_Expression"]]
 
     output_file = RESULTS_DIR / "top_10_genes.csv"
-    top_10_genes[selected_columns].to_csv(output_file, index=False)
-    print("\nTop 10 results saved to:", output_file)
+    top_10_genes.to_csv(output_file, index=False)
 
+    chart = top_10_genes.sort_values("Mean_Expression")
     plt.figure(figsize=(10, 6))
-    plt.bar(top_10_genes["Gene"], top_10_genes["Mean_Expression"])
-    plt.xlabel("Gene")
-    plt.ylabel("Mean Expression")
+    plt.barh(chart["Gene"], chart["Mean_Expression"], color="#2878b5")
+    plt.xlabel("Mean expression")
+    plt.ylabel("Gene")
     plt.title("Top 10 Highly Expressed Genes")
-    plt.xticks(rotation=45)
     plt.tight_layout()
-
     plot_file = RESULTS_DIR / "top_10_genes.png"
     plt.savefig(plot_file, dpi=300)
     plt.close()
-    print("Plot saved to:", plot_file)
 
-    print("\n========== ANALYSIS COMPLETED ==========")
-    print("Total genes analyzed:", len(df))
-    print("Top 10 genes identified successfully.")
-    print("\nResults available in the 'results' folder.")
+    print(f"Dataset shape: {data.shape[0]} genes x {len(expression_columns)} samples")
+    print("\nTop 10 expressed genes:\n")
+    print(top_10_genes.to_string(index=False))
+    print(f"\nSaved table: {output_file}")
+    print(f"Saved plot: {plot_file}")
 
 
 if __name__ == "__main__":
